@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import servicesData from "../data/servicesData";
 
-const API_BASE = "http://localhost:4000";
+const API_BASE = "https://laser-clinic-backend.onrender.com";
 
 function formatTo12Hour(hour, minute = 0) {
   const ampm = hour >= 12 ? "PM" : "AM";
