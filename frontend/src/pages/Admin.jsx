@@ -1,0 +1,1108 @@
+// src/pages/Admin.jsx
+import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import servicesData from "../data/servicesData";
+
+const API =
+  (import.meta.env.VITE_API_URL &&
+    import.meta.env.VITE_API_URL.replace(/\/$/, "")) ||
+  "http://localhost:4000";
+
+const pad2 = (n) => String(n).padStart(2, "0");
+
+function fmtYMD(d) {
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+function todayYMD() {
+  return fmtYMD(new Date());
+}
+
+function addDays(ymd, n) {
+  const d = new Date(`${ymd}T00:00:00`);
+  d.setDate(d.getDate() + n);
+  return fmtYMD(d);
+}
+
+function startOfWeekYMD(ymd) {
+  const d = new Date(`${ymd}T00:00:00`);
+  d.setDate(d.getDate() - d.getDay());
+  return fmtYMD(d);
+}
+
+function weekDays(weekStartYmd) {
+  return Array.from({ length: 7 }, (_, i) => addDays(weekStartYmd, i));
+}
+
+function monthStartYMD(baseYmd) {
+  const d = new Date(`${baseYmd}T00:00:00`);
+  d.setDate(1);
+  return fmtYMD(d);
+}
+
+function endOfMonthYMD(baseYmd) {
+  const d = new Date(`${baseYmd}T00:00:00`);
+  d.setMonth(d.getMonth() + 1, 0);
+  return fmtYMD(d);
+}
+
+function prevMonth(ymd) {
+  const d = new Date(`${ymd}T00:00:00`);
+  d.setMonth(d.getMonth() - 1);
+  return fmtYMD(d);
+}
+
+function nextMonth(ymd) {
+  const d = new Date(`${ymd}T00:00:00`);
+  d.setMonth(d.getMonth() + 1);
+  return fmtYMD(d);
+}
+
+function monthGrid(baseYmd) {
+  const start = new Date(`${baseYmd}T00:00:00`);
+  const month = start.getMonth();
+  start.setDate(1);
+
+  const gridStart = new Date(start);
+  gridStart.setDate(start.getDate() - start.getDay());
+
+  return Array.from({ length: 42 }, (_, i) => {
+    const d = new Date(gridStart);
+    d.setDate(gridStart.getDate() + i);
+    return {
+      ymd: fmtYMD(d),
+      inMonth: d.getMonth() === month,
+    };
+  });
+}
+
+function compareHHMM(a = "", b = "") {
+  return a.localeCompare(b);
+}
+
+function parseDurationToMinutes(duration = "") {
+  if (!duration || duration === "Custom") return 30;
+  const match = duration.match(/\d+/);
+  return match ? Number(match[0]) : 30;
+}
+
+const SERVICES = servicesData.map((s) => ({
+  id: s._id || s.id,
+  name: s.name,
+  category: s.category || "General",
+  minutes: parseDurationToMinutes(s.duration),
+  bookingType:
+    (s.category || "").toLowerCase().includes("nail") ? "nails" : "regular",
+  price: s.price ?? 0,
+  rawDuration: s.duration || "",
+}));
+
+const SERVICE_BY_ID = Object.fromEntries(SERVICES.map((s) => [s.id, s]));
+
+function useAuthFetch() {
+  return async (url, opts = {}) => {
+    const token = localStorage.getItem("admintoken");
+
+    const response = await fetch(API + url, {
+      ...opts,
+      headers: {
+        "Content-Type": "application/json",
+        ...(opts.headers || {}),
+        Authorization: token ? `Bearer ${token}` : "",
+      },
+    });
+
+    let data = {};
+    try {
+      data = await response.json();
+    } catch {}
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        localStorage.removeItem("admintoken");
+        window.location.href = "/admin-login";
+      }
+      throw new Error(data.error || data.message || `HTTP ${response.status}`);
+    }
+
+    return data;
+  };
+}
+
+function dayRuleSummary(rules, ymd) {
+  const dayRules = rules.filter((r) => r.date === ymd);
+  return {
+    isClosed: dayRules.some((r) => r.kind === "closed"),
+    hours: dayRules.find((r) => r.kind === "hours"),
+    blocks: dayRules.find((r) => r.kind === "blocks"),
+  };
+}
+
+function BookingCards({ rows }) {
+  if (!rows?.length) {
+    return <div className="text-sm text-gray-500">No bookings.</div>;
+  }
+
+  return (
+    <div className="space-y-3">
+      {rows.map((b) => (
+        <div key={b._id} className="rounded-xl border bg-white p-3 shadow-sm">
+          <div className="flex items-center justify-between gap-2">
+            <div className="font-medium text-sm">
+              {b.time} {b.endTime ? `– ${b.endTime}` : ""}
+            </div>
+
+            <div className="flex gap-2 flex-wrap">
+              {b.serviceCategory && (
+                <div className="text-[10px] px-2 py-0.5 rounded-full bg-gray-900 text-white">
+                  {b.serviceCategory}
+                </div>
+              )}
+              {b.bookingType === "nails" && (
+                <div className="text-[10px] px-2 py-0.5 rounded-full bg-pink-100 text-pink-700">
+                  nails
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-1 text-sm">
+            <div className="font-medium">{b.name}</div>
+            <div className="text-gray-600">{b.serviceName}</div>
+          </div>
+
+          <div className="mt-1 text-xs text-gray-500 space-y-0.5">
+            <div>{b.phone}</div>
+            {b.email ? <div>{b.email}</div> : null}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function BookingTable({ rows }) {
+  if (!rows?.length) {
+    return <div className="text-sm text-gray-500">No bookings.</div>;
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="text-left border-b">
+            <th className="py-2 pr-4">Time</th>
+            <th className="py-2 pr-4">Name</th>
+            <th className="py-2 pr-4">Service</th>
+            <th className="py-2 pr-4">Contact</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((b) => (
+            <tr key={b._id} className="border-b last:border-0">
+              <td className="py-2 pr-4">
+                {b.time} {b.endTime ? `– ${b.endTime}` : ""}
+              </td>
+              <td className="py-2 pr-4">{b.name}</td>
+              <td className="py-2 pr-4">
+                {b.serviceCategory} / {b.serviceName}
+                {b.bookingType === "nails" ? " / nails" : ""}
+              </td>
+              <td className="py-2 pr-4">
+                <div>{b.phone}</div>
+                {b.email ? <div className="text-gray-500">{b.email}</div> : null}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function DayChip({
+  ymd,
+  selectedDay,
+  setSelectedDay,
+  setRuleDate,
+  bookingsByDate,
+  rules,
+}) {
+  const isSel = ymd === selectedDay;
+  const count = (bookingsByDate[ymd] || []).length;
+  const info = dayRuleSummary(rules, ymd);
+
+  return (
+    <button
+      onClick={() => {
+        setSelectedDay(ymd);
+        setRuleDate(ymd);
+      }}
+      className={`shrink-0 px-3 py-2 rounded-lg border text-[12px] mr-2 min-w-[64px] ${
+        isSel ? "bg-black text-white border-black" : "bg-white"
+      }`}
+    >
+      <div className="font-medium">
+        {new Date(`${ymd}T00:00:00`).toLocaleDateString(undefined, {
+          weekday: "short",
+        })}{" "}
+        {ymd.slice(8, 10)}
+      </div>
+      <div className="text-[11px]">
+        {info.isClosed ? "Closed" : count ? `${count} bookings` : "—"}
+      </div>
+    </button>
+  );
+}
+
+function DayCell({
+  cell,
+  selectedDay,
+  setSelectedDay,
+  setRuleDate,
+  bookingsByDate,
+  rules,
+  today,
+}) {
+  const count = (bookingsByDate[cell.ymd] || []).length;
+  const info = dayRuleSummary(rules, cell.ymd);
+  const isSel = cell.ymd === selectedDay;
+  const isToday = cell.ymd === today;
+
+  return (
+    <button
+      onClick={() => {
+        setSelectedDay(cell.ymd);
+        setRuleDate(cell.ymd);
+      }}
+      className={[
+        "h-16 border p-2 text-left relative transition",
+        cell.inMonth ? "bg-white" : "bg-gray-50 text-gray-400",
+        isSel ? "ring-2 ring-black" : "",
+        info.isClosed ? "opacity-60" : "",
+      ].join(" ")}
+    >
+      <div className="text-[11px]">{cell.ymd.slice(8, 10)}</div>
+
+      {isToday && (
+        <span className="absolute top-1 right-1 text-[10px] px-1 rounded bg-black text-white">
+          today
+        </span>
+      )}
+
+      {info.isClosed && (
+        <span className="absolute bottom-1 left-1 text-[10px] px-1 rounded bg-red-600 text-white">
+          closed
+        </span>
+      )}
+
+      {count > 0 && (
+        <span className="absolute bottom-1 right-1 text-[10px] px-1.5 py-0.5 rounded-full bg-gray-900 text-white">
+          {count}
+        </span>
+      )}
+    </button>
+  );
+}
+
+export default function Admin() {
+  const navigate = useNavigate();
+  const authFetch = useAuthFetch();
+
+  useEffect(() => {
+    const token = localStorage.getItem("admintoken");
+    if (!token) navigate("/admin-login");
+  }, [navigate]);
+
+  const today = useMemo(() => todayYMD(), []);
+  const tomorrow = useMemo(() => addDays(today, 1), [today]);
+
+  const [selectedDay, setSelectedDay] = useState(today);
+  const [weekStart, setWeekStart] = useState(startOfWeekYMD(today));
+  const [monthAnchor, setMonthAnchor] = useState(monthStartYMD(today));
+  const [showMonth, setShowMonth] = useState(false);
+
+  const [hours, setHours] = useState({
+    regular: {
+      weekday: { open: "10:00", close: "20:00" },
+      saturday: { open: "10:00", close: "20:00" },
+      sunday: { open: "", close: "" },
+    },
+    nails: {
+      weekday: { open: "10:00", close: "20:00" },
+      saturday: { open: "10:00", close: "20:00" },
+      sunday: { open: "", close: "" },
+    },
+  });
+
+  const [hoursMsg, setHoursMsg] = useState("");
+  const [bookings, setBookings] = useState([]);
+  const [rules, setRules] = useState([]);
+  const [loadingBookings, setLoadingBookings] = useState(false);
+  const [bookingsErr, setBookingsErr] = useState("");
+  const [rulesErr, setRulesErr] = useState("");
+
+  const [qName, setQName] = useState("");
+  const [qPhone, setQPhone] = useState("");
+  const [qEmail, setQEmail] = useState("");
+  const [qServiceId, setQServiceId] = useState(
+    SERVICES.length ? SERVICES[0].id : ""
+  );
+  const [qDate, setQDate] = useState(today);
+  const [qSlots, setQSlots] = useState([]);
+  const [qTime, setQTime] = useState("");
+  const [qMsg, setQMsg] = useState("");
+
+  const [ruleDate, setRuleDate] = useState(today);
+  const [ruleKind, setRuleKind] = useState("closed");
+  const [ruleOpen, setRuleOpen] = useState("12:00");
+  const [ruleClose, setRuleClose] = useState("16:00");
+  const [ruleBlocks, setRuleBlocks] = useState([
+    { start: "13:00", end: "14:00" },
+  ]);
+  const [ruleMsg, setRuleMsg] = useState("");
+
+  const days = weekDays(weekStart);
+  const grid = useMemo(() => monthGrid(monthAnchor), [monthAnchor]);
+
+  const thisMonthLabel = useMemo(() => {
+    const d = new Date(`${monthAnchor}T00:00:00`);
+    return d.toLocaleString(undefined, { month: "long", year: "numeric" });
+  }, [monthAnchor]);
+
+  const bookingsByDate = useMemo(() => {
+    const map = {};
+    for (const b of bookings) {
+      (map[b.date] ||= []).push(b);
+    }
+    for (const k of Object.keys(map)) {
+      map[k].sort((a, b) => compareHHMM(a.time, b.time));
+    }
+    return map;
+  }, [bookings]);
+
+  const todaysList = bookingsByDate[today] || [];
+  const tomorrowsList = bookingsByDate[tomorrow] || [];
+  const selectedList = bookingsByDate[selectedDay] || [];
+
+  async function loadHours() {
+    try {
+      const data = await authFetch("/api/admin/hours");
+      setHours(data);
+    } catch {}
+  }
+
+  async function loadMonthBookings(anchorYmd) {
+    try {
+      setLoadingBookings(true);
+      setBookingsErr("");
+      const from = monthStartYMD(anchorYmd);
+      const rows = await authFetch(`/api/admin/bookings?from=${from}`);
+      const end = endOfMonthYMD(anchorYmd);
+      setBookings(rows.filter((b) => b.date >= from && b.date <= end));
+    } catch (e) {
+      setBookingsErr(e.message);
+      setBookings([]);
+    } finally {
+      setLoadingBookings(false);
+    }
+  }
+
+  async function loadMonthRules(anchorYmd) {
+    try {
+      setRulesErr("");
+      const from = monthStartYMD(anchorYmd);
+      const rows = await authFetch(`/api/admin/rules?from=${from}`);
+      const end = endOfMonthYMD(anchorYmd);
+      setRules(rows.filter((r) => r.date >= from && r.date <= end));
+    } catch (e) {
+      setRulesErr(e.message);
+      setRules([]);
+    }
+  }
+
+  useEffect(() => {
+    loadHours();
+  }, []);
+
+  useEffect(() => {
+    loadMonthBookings(monthAnchor);
+  }, [monthAnchor]);
+
+  useEffect(() => {
+    loadMonthRules(monthAnchor);
+  }, [monthAnchor]);
+
+  useEffect(() => {
+    (async () => {
+      setQSlots([]);
+      setQTime("");
+  
+      if (!qDate || !qServiceId) return;
+  
+      try {
+        const svc = SERVICE_BY_ID[qServiceId];
+        if (!svc) return;
+  
+        const bookingType = svc.bookingType || "regular";
+  
+        const r = await fetch(
+          `${API}/api/bookings/availability?date=${qDate}&serviceId=${qServiceId}&bookingType=${bookingType}`
+        );
+  
+        const data = await r.json();
+  
+        if (!r.ok) {
+          console.error("Availability error:", data);
+          return;
+        }
+  
+        setQSlots(data.availableSlots || data.slots || []);
+      } catch (error) {
+        console.error("Availability fetch failed:", error);
+      }
+    })();
+  }, [qDate, qServiceId]);
+
+  async function saveHours() {
+    try {
+      setHoursMsg("");
+      await authFetch("/api/admin/hours", {
+        method: "PUT",
+        body: JSON.stringify(hours),
+      });
+      setHoursMsg("Saved ✔");
+      setTimeout(() => setHoursMsg(""), 1500);
+    } catch (e) {
+      setHoursMsg(e.message);
+    }
+  }
+
+  async function createBooking() {
+    try {
+      setQMsg("");
+
+      if (!qName || !qPhone || !qServiceId || !qDate || !qTime) {
+        setQMsg("Please fill name, phone, service, date, and time.");
+        return;
+      }
+
+      const svc = SERVICE_BY_ID[qServiceId];
+      if (!svc) {
+        setQMsg("Please select a valid service.");
+        return;
+      }
+
+      const body = {
+        name: qName,
+        phone: qPhone,
+        email: qEmail,
+        serviceId: qServiceId,
+        serviceName: svc.name,
+        serviceCategory: svc.category,
+        bookingType: svc.bookingType || "regular",
+        date: qDate,
+        time: qTime,
+      };
+
+      await authFetch("/api/admin/bookings", {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+
+      setQMsg("Booked ✔");
+      await loadMonthBookings(monthAnchor);
+
+      setQName("");
+      setQPhone("");
+      setQEmail("");
+      setQTime("");
+      setQServiceId(SERVICES.length ? SERVICES[0].id : "");
+    } catch (e) {
+      setQMsg(e.message);
+    }
+  }
+
+  async function addRule() {
+    try {
+      setRuleMsg("");
+
+      const body = { date: ruleDate, kind: ruleKind };
+      if (ruleKind === "hours") {
+        body.open = ruleOpen;
+        body.close = ruleClose;
+      }
+      if (ruleKind === "blocks") {
+        body.blocks = ruleBlocks;
+      }
+
+      const saved = await authFetch("/api/admin/rules", {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+
+      setRules((r) => [...r, saved].sort((a, b) => a.date.localeCompare(b.date)));
+
+      if (qDate === ruleDate && qServiceId) {
+        const svc = SERVICE_BY_ID[qServiceId];
+        const bookingType = svc?.bookingType || "regular";
+      
+        const r = await fetch(
+          `${API}/api/bookings/availability?date=${qDate}&serviceId=${qServiceId}&bookingType=${bookingType}`
+        );
+      
+        const data = await r.json();
+      
+        if (r.ok) {
+          setQSlots(data.availableSlots || data.slots || []);
+        }
+      }
+
+      setRuleMsg("Saved ✔");
+      setTimeout(() => setRuleMsg(""), 1500);
+    } catch (e) {
+      setRuleMsg(e.message);
+    }
+  }
+
+  async function removeRule(id) {
+    try {
+      await authFetch(`/api/admin/rules/${id}`, {
+        method: "DELETE",
+      });
+      setRules((r) => r.filter((x) => x._id !== id));
+    } catch {}
+  }
+
+  function logout() {
+    localStorage.removeItem("admintoken");
+    navigate("/admin-login");
+  }
+
+  return (
+    <div className="min-h-dvh bg-gray-50">
+      <div className="sticky top-0 z-40 bg-gray-50/90 backdrop-blur border-b">
+        <div className="max-w-screen-xl mx-auto px-3 sm:px-6 md:px-8">
+          <div className="py-3 sm:py-4 flex items-center gap-2">
+            <h1 className="text-base sm:text-lg md:text-xl font-bold">Admin</h1>
+
+            <div className="ml-auto flex gap-2">
+              <button
+                onClick={() => {
+                  setSelectedDay(today);
+                  setWeekStart(startOfWeekYMD(today));
+                  setMonthAnchor(monthStartYMD(today));
+                }}
+                className="border px-3 py-2 rounded-lg text-sm"
+              >
+                Today
+              </button>
+
+              <button
+                onClick={() => {
+                  loadMonthBookings(monthAnchor);
+                  loadMonthRules(monthAnchor);
+                }}
+                className="border px-3 py-2 rounded-lg text-sm"
+              >
+                Refresh
+              </button>
+
+              <button
+                onClick={logout}
+                className="bg-black text-white px-3 py-2 rounded-lg text-sm"
+              >
+                Logout
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="max-w-screen-xl mx-auto px-3 sm:px-6 md:px-8 py-4 sm:py-6 space-y-6">
+        <section className="bg-white rounded-xl shadow">
+          <div className="p-4 sm:p-5 text-base sm:text-lg font-semibold">
+            Today & Tomorrow
+          </div>
+          <div className="px-4 sm:px-5 pb-4 sm:pb-5 space-y-4">
+            <div>
+              <div className="text-xs sm:text-sm text-gray-600 mb-1">
+                Today ({today})
+              </div>
+              <div className="md:hidden">
+                <BookingCards rows={todaysList} />
+              </div>
+              <div className="hidden md:block">
+                <BookingTable rows={todaysList} />
+              </div>
+            </div>
+
+            <div>
+              <div className="text-xs sm:text-sm text-gray-600 mb-1">
+                Tomorrow ({tomorrow})
+              </div>
+              <div className="md:hidden">
+                <BookingCards rows={tomorrowsList} />
+              </div>
+              <div className="hidden md:block">
+                <BookingTable rows={tomorrowsList} />
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="bg-white rounded-xl shadow">
+          <div className="p-4 sm:p-5 text-base sm:text-lg font-semibold">
+            Calendar & Day Details
+          </div>
+
+          <div className="px-4 sm:px-5 pb-4 sm:pb-5 space-y-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => setWeekStart(addDays(weekStart, -7))}
+                className="border px-3 py-2 rounded-lg"
+              >
+                ‹ Prev
+              </button>
+
+              <div className="text-sm text-gray-600">
+                {new Date(`${weekStart}T00:00:00`).toLocaleDateString(undefined, {
+                  month: "long",
+                  day: "numeric",
+                })}
+                {" – "}
+                {new Date(`${addDays(weekStart, 6)}T00:00:00`).toLocaleDateString(
+                  undefined,
+                  { month: "long", day: "numeric" }
+                )}
+              </div>
+
+              <button
+                onClick={() => setWeekStart(addDays(weekStart, 7))}
+                className="border px-3 py-2 rounded-lg ml-auto"
+              >
+                Next ›
+              </button>
+            </div>
+
+            <div className="overflow-x-auto -mx-1 px-1">
+              <div className="flex pb-1">
+                {days.map((d) => (
+                  <DayChip
+                    key={d}
+                    ymd={d}
+                    selectedDay={selectedDay}
+                    setSelectedDay={setSelectedDay}
+                    setRuleDate={setRuleDate}
+                    bookingsByDate={bookingsByDate}
+                    rules={rules}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <button
+              onClick={() => setShowMonth((v) => !v)}
+              className="w-full border px-3 py-2 rounded-lg"
+            >
+              {showMonth ? "Hide Full Month" : "Show Full Month"}
+            </button>
+
+            {showMonth && (
+              <div className="border rounded-lg p-2 sm:p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <button
+                    onClick={() => setMonthAnchor(prevMonth(monthAnchor))}
+                    className="border px-3 py-2 rounded-lg"
+                  >
+                    ‹
+                  </button>
+
+                  <div className="font-medium text-sm sm:text-base">
+                    {thisMonthLabel}
+                  </div>
+
+                  <button
+                    onClick={() => setMonthAnchor(nextMonth(monthAnchor))}
+                    className="border px-3 py-2 rounded-lg"
+                  >
+                    ›
+                  </button>
+
+                  <div className="ml-auto text-xs sm:text-sm text-gray-500">
+                    {loadingBookings
+                      ? "Loading…"
+                      : bookingsErr
+                      ? bookingsErr
+                      : rulesErr
+                      ? rulesErr
+                      : null}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-7 text-[10px] sm:text-xs text-gray-600 mb-1 px-1">
+                  {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
+                    <div key={d}>{d}</div>
+                  ))}
+                </div>
+
+                <div className="grid grid-cols-7 gap-px bg-gray-200 rounded overflow-hidden">
+                  {grid.map((cell) => (
+                    <DayCell
+                      key={cell.ymd}
+                      cell={cell}
+                      selectedDay={selectedDay}
+                      setSelectedDay={setSelectedDay}
+                      setRuleDate={setRuleDate}
+                      bookingsByDate={bookingsByDate}
+                      rules={rules}
+                      today={today}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div>
+              <h3 className="font-medium mb-2">Bookings on {selectedDay}</h3>
+              <div className="md:hidden">
+                <BookingCards rows={selectedList} />
+              </div>
+              <div className="hidden md:block">
+                <BookingTable rows={selectedList} />
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="bg-white rounded-xl shadow">
+          <div className="p-4 sm:p-5 text-base sm:text-lg font-semibold">
+            Special Hours & Closures
+          </div>
+
+          <div className="px-4 sm:px-5 pb-4 sm:pb-5 space-y-4">
+            <div className="grid gap-3 md:grid-cols-3">
+              <input
+                type="date"
+                className="border rounded-lg p-3"
+                value={ruleDate}
+                onChange={(e) => setRuleDate(e.target.value)}
+              />
+
+              <select
+                className="border rounded-lg p-3"
+                value={ruleKind}
+                onChange={(e) => setRuleKind(e.target.value)}
+              >
+                <option value="closed">Closed (all day)</option>
+                <option value="hours">Override open/close</option>
+                <option value="blocks">Block time ranges</option>
+              </select>
+
+              {ruleKind === "hours" && (
+                <div className="flex gap-2">
+                  <input
+                    type="time"
+                    className="border rounded-lg p-3 w-32"
+                    value={ruleOpen}
+                    onChange={(e) => setRuleOpen(e.target.value)}
+                  />
+                  <span className="self-center">to</span>
+                  <input
+                    type="time"
+                    className="border rounded-lg p-3 w-32"
+                    value={ruleClose}
+                    onChange={(e) => setRuleClose(e.target.value)}
+                  />
+                </div>
+              )}
+
+              {ruleKind === "blocks" && (
+                <div className="md:col-span-2 space-y-2">
+                  {ruleBlocks.map((b, i) => (
+                    <div key={i} className="flex gap-2">
+                      <input
+                        type="time"
+                        className="border rounded-lg p-3 w-32"
+                        value={b.start}
+                        onChange={(e) => {
+                          const v = [...ruleBlocks];
+                          v[i] = { ...v[i], start: e.target.value };
+                          setRuleBlocks(v);
+                        }}
+                      />
+                      <span className="self-center">to</span>
+                      <input
+                        type="time"
+                        className="border rounded-lg p-3 w-32"
+                        value={b.end}
+                        onChange={(e) => {
+                          const v = [...ruleBlocks];
+                          v[i] = { ...v[i], end: e.target.value };
+                          setRuleBlocks(v);
+                        }}
+                      />
+                      <button
+                        type="button"
+                        className="border px-3 py-2 rounded-lg"
+                        onClick={() => {
+                          const v = [...ruleBlocks];
+                          v.splice(i, 1);
+                          setRuleBlocks(
+                            v.length ? v : [{ start: "13:00", end: "14:00" }]
+                          );
+                        }}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+
+                  <button
+                    type="button"
+                    className="border px-3 py-2 rounded-lg"
+                    onClick={() =>
+                      setRuleBlocks([...ruleBlocks, { start: "13:00", end: "14:00" }])
+                    }
+                  >
+                    + Add block
+                  </button>
+                </div>
+              )}
+
+              <div className="md:col-span-3 flex gap-2 items-center">
+                <button
+                  onClick={async () => {
+                    await addRule();
+                    await loadMonthRules(monthAnchor);
+                  }}
+                  className="bg-black text-white px-4 py-2 rounded-lg"
+                >
+                  Save rule
+                </button>
+                {ruleMsg && <span className="text-sm">{ruleMsg}</span>}
+              </div>
+            </div>
+
+            <div>
+              <h3 className="font-medium mb-2">This month's rules</h3>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm min-w-[560px]">
+                  <thead>
+                    <tr className="text-left border-b">
+                      <th className="py-2 pr-4">Date</th>
+                      <th className="py-2 pr-4">Type</th>
+                      <th className="py-2 pr-4">Details</th>
+                      <th className="py-2 pr-4"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rules.length === 0 && (
+                      <tr>
+                        <td className="py-3" colSpan={4}>
+                          No rules yet.
+                        </td>
+                      </tr>
+                    )}
+
+                    {rules.map((r) => (
+                      <tr key={r._id} className="border-b last:border-0">
+                        <td className="py-2 pr-4">{r.date}</td>
+                        <td className="py-2 pr-4 capitalize">{r.kind}</td>
+                        <td className="py-2 pr-4">
+                          {r.kind === "closed" && "Closed all day"}
+                          {r.kind === "hours" && `Open ${r.open} – ${r.close}`}
+                          {r.kind === "blocks" &&
+                            (r.blocks?.map((b) => `${b.start}–${b.end}`).join(", ") ||
+                              "—")}
+                        </td>
+                        <td className="py-2 pr-4">
+                          <button
+                            onClick={() => removeRule(r._id)}
+                            className="text-red-600"
+                          >
+                            Delete
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="bg-white rounded-xl shadow">
+          <div className="p-4 sm:p-5 text-base sm:text-lg font-semibold">
+            Booking Hours
+          </div>
+
+          <div className="px-4 sm:px-5 pb-4 sm:pb-5 space-y-6">
+            <div>
+              <h3 className="font-medium mb-3">Regular Salon Hours</h3>
+              <div className="grid gap-4 sm:grid-cols-3">
+                {[
+                  { label: "Mon–Fri", key: "weekday" },
+                  { label: "Saturday", key: "saturday" },
+                  { label: "Sunday", key: "sunday" },
+                ].map(({ label, key }) => (
+                  <div key={key} className="border rounded-lg p-4">
+                    <div className="font-medium mb-2">{label}</div>
+                    <div className="flex gap-2">
+                      <input
+                        type="time"
+                        className="border rounded-lg p-3 w-32"
+                        value={hours.regular?.[key]?.open || ""}
+                        onChange={(e) =>
+                          setHours((h) => ({
+                            ...h,
+                            regular: {
+                              ...h.regular,
+                              [key]: { ...h.regular[key], open: e.target.value },
+                            },
+                          }))
+                        }
+                      />
+                      <span className="self-center">to</span>
+                      <input
+                        type="time"
+                        className="border rounded-lg p-3 w-32"
+                        value={hours.regular?.[key]?.close || ""}
+                        onChange={(e) =>
+                          setHours((h) => ({
+                            ...h,
+                            regular: {
+                              ...h.regular,
+                              [key]: { ...h.regular[key], close: e.target.value },
+                            },
+                          }))
+                        }
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-1 flex gap-2 items-center">
+              <button
+                onClick={saveHours}
+                className="bg-black text-white px-4 py-2 rounded-lg"
+              >
+                Save
+              </button>
+              {hoursMsg && <span className="text-sm">{hoursMsg}</span>}
+            </div>
+          </div>
+        </section>
+
+        <section className="bg-white rounded-xl shadow">
+          <div className="p-4 sm:p-5 text-base sm:text-lg font-semibold">
+            Quick Phone Booking
+          </div>
+
+          <div className="px-4 sm:px-5 pb-4 sm:pb-5 space-y-4">
+            <div className="grid gap-3 md:grid-cols-2">
+              <input
+                type="text"
+                placeholder="Customer name"
+                className="border rounded-lg p-3"
+                value={qName}
+                onChange={(e) => setQName(e.target.value)}
+              />
+
+              <input
+                type="text"
+                placeholder="Phone number"
+                className="border rounded-lg p-3"
+                value={qPhone}
+                onChange={(e) => setQPhone(e.target.value)}
+              />
+
+              <input
+                type="email"
+                placeholder="Email (optional)"
+                className="border rounded-lg p-3"
+                value={qEmail}
+                onChange={(e) => setQEmail(e.target.value)}
+              />
+
+              <select
+                value={qServiceId}
+                onChange={(e) => setQServiceId(e.target.value)}
+                className="border rounded-lg p-3"
+              >
+                <option value="">Select service</option>
+                {SERVICES.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.category} — {s.name}
+                  </option>
+                ))}
+              </select>
+
+              <input
+                type="date"
+                className="border rounded-lg p-3"
+                value={qDate}
+                onChange={(e) => setQDate(e.target.value)}
+              />
+
+              <select
+                value={qTime}
+                onChange={(e) => setQTime(e.target.value)}
+                className="border rounded-lg p-3"
+                disabled={!qDate || !qServiceId || qSlots.length === 0}
+              >
+                <option value="">
+                  {!qDate || !qServiceId
+                    ? "Select date and service first"
+                    : qSlots.length === 0
+                    ? "No available times"
+                    : "Select time"}
+                </option>
+                {qSlots.map((slot) => (
+                  <option key={slot} value={slot}>
+                    {slot}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {qServiceId && SERVICE_BY_ID[qServiceId] && (
+              <div className="rounded-lg border bg-gray-50 p-3 text-sm text-gray-700">
+                <div>
+                  <strong>Selected service:</strong> {SERVICE_BY_ID[qServiceId].name}
+                </div>
+                <div>
+                  <strong>Category:</strong> {SERVICE_BY_ID[qServiceId].category}
+                </div>
+                <div>
+                  <strong>Duration:</strong>{" "}
+                  {SERVICE_BY_ID[qServiceId].rawDuration ||
+                    `${SERVICE_BY_ID[qServiceId].minutes} MIN`}
+                </div>
+                <div>
+                  <strong>Price:</strong>{" "}
+                  {SERVICE_BY_ID[qServiceId].price === null
+                    ? "Custom"
+                    : `$${SERVICE_BY_ID[qServiceId].price}`}
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-2 items-center">
+              <button
+                onClick={createBooking}
+                className="bg-black text-white px-4 py-2 rounded-lg"
+              >
+                Create booking
+              </button>
+              {qMsg && <span className="text-sm">{qMsg}</span>}
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}
