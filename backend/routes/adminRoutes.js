@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const { requireAdmin } = require("../middleware/authMiddleware");
 const Booking = require("../models/Booking");
-const HoursConfig = require("../models/HoursConfig");
+const HoursConfig = require("../models/Hoursconfig");
 const DayRule = require("../models/DayRule");
 const { getWorkingSlots } = require("../utils/bookingHelpers");
 
