@@ -6,7 +6,7 @@ import servicesData from "../data/servicesData";
 const API =
   (import.meta.env.VITE_API_URL &&
     import.meta.env.VITE_API_URL.replace(/\/$/, "")) ||
-  "http://localhost:4000";
+  "https://laser-clinic-5.onrender.com";
 
 const pad2 = (n) => String(n).padStart(2, "0");
 
