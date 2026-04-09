@@ -2,14 +2,6 @@ const express = require("express");
 const router = express.Router();
 const bookingController = require("../controllers/BookingController");
 
-router.get("/availability", (req, res) => {
-  res.json({
-    ok: true,
-    message: "availability route works",
-    query: req.query,
-  });
-});
-
 router.get("/", bookingController.getAllBookings);
 router.post("/", bookingController.createBooking);
 router.put("/:id", bookingController.updateBooking);
