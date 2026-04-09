@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import servicesData from "../data/servicesData";
 
 const API_BASE =
-  import.meta.env.VITE_API_URL || "https://laser-clinic-5.onrender.com/";
+  import.meta.env.VITE_API_URL || "https://laser-clinic-5.onrender.com";
 
 function isSunday(dateString) {
   if (!dateString) return false;
