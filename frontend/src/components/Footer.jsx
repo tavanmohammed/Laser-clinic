@@ -12,7 +12,7 @@ export default function Footer() {
             {/* COMPANY */}
             <div>
               <h3 className="text-[20px] font-semibold text-[#4a4a4a]">
-                Alla Beauty Laser & Skin Clinic
+                Alla Beauty Laser  Skin Clinic
               </h3>
 
               <div className="mt-8 space-y-4 text-[18px]">
@@ -81,7 +81,7 @@ export default function Footer() {
           {/* BOTTOM */}
           <div className="mt-24 flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
             <p className="text-[16px] text-[#4f4f4f]">
-              © 2026 Alla Beauty Laser & Skin Clinic &nbsp;|&nbsp; Privacy Policy
+              © 2026 Alla Beauty Laser  Skin Clinic &nbsp;|&nbsp; Privacy Policy
             </p>
 
             <p className="text-[16px] text-[#4f4f4f]">
