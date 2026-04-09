@@ -20,6 +20,9 @@ app.use(
 
 app.use(express.json());
 
+app.get("/", (req, res) => {
+  res.send("API is running");
+});
 
 app.get("/test-route", (req, res) => {
   res.send("backend latest code is live");
