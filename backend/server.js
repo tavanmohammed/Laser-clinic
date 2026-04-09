@@ -11,12 +11,27 @@ const { verifyEmailTransport } = require("./config/email");
 
 const app = express();
 
+const allowedOrigins = [
+  "http://localhost:5173",
+  "https://laser-clinic.onrender.com",
+];
+
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || "http://localhost:5173",
+    origin: function (origin, callback) {
+      console.log("Request origin:", origin);
+
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
     credentials: true,
   })
 );
+
+app.options("*", cors());
 
 app.use(express.json());
 
@@ -37,9 +52,7 @@ async function startServer() {
 
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
-      console.log(`  /api/auth`);
-      console.log(`  /api/bookings`);
-      console.log(`  /api/admin`);
+      console.log(`CLIENT_URL: ${process.env.CLIENT_URL}`);
     });
   } catch (error) {
     console.error("Server startup error:", error.message);
