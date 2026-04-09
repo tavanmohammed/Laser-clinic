@@ -1,14 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import servicesData from "../data/servicesData";
 
-const API_BASE = "https://laser-clinic-5.onrender.com/";
-
-function formatTo12Hour(hour, minute = 0) {
-  const ampm = hour >= 12 ? "PM" : "AM";
-  const h = hour % 12 || 12;
-  const m = minute === 0 ? "00" : minute;
-  return `${h}:${m} ${ampm}`;
-}
+const API_BASE =
+  import.meta.env.VITE_API_URL || "https://laser-clinic-5.onrender.com/";
 
 function isSunday(dateString) {
   if (!dateString) return false;
@@ -44,35 +38,40 @@ export default function Booking() {
 
   useEffect(() => {
     setSelectedServiceId("");
+    setSelectedTime("");
   }, [selectedCategory]);
 
   useEffect(() => {
     async function fetchAvailability() {
       if (!selectedDate) {
         setAvailableSlots([]);
+        setSelectedTime("");
         return;
       }
 
       if (isSunday(selectedDate)) {
         setAvailableSlots([]);
+        setSelectedTime("");
         return;
       }
 
       try {
         setLoadingSlots(true);
+        setSelectedTime("");
 
         const res = await fetch(
           `${API_BASE}/api/bookings/availability?date=${selectedDate}`
         );
-        const data = await res.json();
 
         if (!res.ok) {
-          throw new Error(data.message || "Failed to load availability");
+          const text = await res.text();
+          throw new Error(text || "Failed to load availability");
         }
 
+        const data = await res.json();
         setAvailableSlots(data.availableSlots || []);
       } catch (error) {
-        console.error(error);
+        console.error("Availability fetch error:", error.message);
         setAvailableSlots([]);
       } finally {
         setLoadingSlots(false);
@@ -82,19 +81,35 @@ export default function Booking() {
     fetchAvailability();
   }, [selectedDate]);
 
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-  
-    if (!selectedService) return alert("Select service");
-    if (!selectedDate) return alert("Select date");
-    if (!selectedTime) return alert("Select time");
-  
+
+    if (!selectedService) {
+      alert("Please select a service.");
+      return;
+    }
+
+    if (!selectedDate) {
+      alert("Please select a date.");
+      return;
+    }
+
+    if (!selectedTime) {
+      alert("Please select a time.");
+      return;
+    }
+
     try {
       setSubmitting(true);
-  
-      // ⚡ IMMEDIATE FEEDBACK
-      alert("Booking is being confirmed...");
-  
+
       const payload = {
         customerName: formData.fullName,
         phone: formData.phone,
@@ -108,7 +123,7 @@ export default function Booking() {
         time: selectedTime,
         source: "website",
       };
-  
+
       const res = await fetch(`${API_BASE}/api/bookings`, {
         method: "POST",
         headers: {
@@ -116,17 +131,16 @@ export default function Booking() {
         },
         body: JSON.stringify(payload),
       });
-  
-      const data = await res.json();
-  
+
       if (!res.ok) {
-        throw new Error(data.message);
+        const text = await res.text();
+        throw new Error(text || "Failed to create booking");
       }
-  
-      // ✅ FINAL SUCCESS
+
+      await res.json();
+
       alert("Booking confirmed!");
-  
-      // reset form
+
       setSelectedServiceId("");
       setSelectedDate("");
       setSelectedTime("");
@@ -137,15 +151,13 @@ export default function Booking() {
         email: "",
         notes: "",
       });
-  
     } catch (error) {
-      alert(error.message);
+      console.error("Booking submit error:", error.message);
+      alert(error.message || "Something went wrong.");
     } finally {
       setSubmitting(false);
     }
   };
-
-  
 
   return (
     <section className="min-h-screen bg-[#f5f5f3]">
@@ -155,7 +167,8 @@ export default function Booking() {
             Book an Appointment
           </h1>
           <p className="mt-5 text-lg leading-8 text-[#4f4f4f]">
-            Choose your treatment, select a date and time, and submit your booking.
+            Choose your treatment, select a date and time, and submit your
+            booking.
           </p>
         </div>
 
@@ -298,7 +311,9 @@ export default function Booking() {
                   onChange={(e) => setSelectedTime(e.target.value)}
                   className="w-full rounded-xl border border-gray-300 px-4 py-3 outline-none"
                   required
-                  disabled={!selectedDate || loadingSlots || availableSlots.length === 0}
+                  disabled={
+                    !selectedDate || loadingSlots || availableSlots.length === 0
+                  }
                 >
                   <option value="">
                     {!selectedDate
@@ -324,10 +339,9 @@ export default function Booking() {
                 </label>
                 <input
                   type="text"
+                  name="fullName"
                   value={formData.fullName}
-                  onChange={(e) =>
-                    setFormData({ ...formData, fullName: e.target.value })
-                  }
+                  onChange={handleInputChange}
                   className="w-full rounded-xl border border-gray-300 px-4 py-3 outline-none"
                   required
                 />
@@ -339,10 +353,9 @@ export default function Booking() {
                 </label>
                 <input
                   type="tel"
+                  name="phone"
                   value={formData.phone}
-                  onChange={(e) =>
-                    setFormData({ ...formData, phone: e.target.value })
-                  }
+                  onChange={handleInputChange}
                   className="w-full rounded-xl border border-gray-300 px-4 py-3 outline-none"
                   required
                 />
@@ -354,10 +367,9 @@ export default function Booking() {
                 </label>
                 <input
                   type="email"
+                  name="email"
                   value={formData.email}
-                  onChange={(e) =>
-                    setFormData({ ...formData, email: e.target.value })
-                  }
+                  onChange={handleInputChange}
                   className="w-full rounded-xl border border-gray-300 px-4 py-3 outline-none"
                   required
                 />
@@ -369,23 +381,21 @@ export default function Booking() {
                 </label>
                 <textarea
                   rows="5"
+                  name="notes"
                   value={formData.notes}
-                  onChange={(e) =>
-                    setFormData({ ...formData, notes: e.target.value })
-                  }
+                  onChange={handleInputChange}
                   className="w-full rounded-xl border border-gray-300 px-4 py-3 outline-none"
                   placeholder="Anything we should know"
                 />
               </div>
 
               <button
-              type="submit"
-              disabled={submitting}
-              className="w-full rounded-xl bg-[#f2a482] px-6 py-4 text-lg font-medium text-white transition hover:opacity-90 disabled:opacity-60"
+                type="submit"
+                disabled={submitting}
+                className="w-full rounded-xl bg-[#f2a482] px-6 py-4 text-lg font-medium text-white transition hover:opacity-90 disabled:opacity-60"
               >
-              {submitting ? "Processing booking..." : "Confirm Booking"}
+                {submitting ? "Processing booking..." : "Confirm Booking"}
               </button>
-
             </form>
           </div>
         </div>
