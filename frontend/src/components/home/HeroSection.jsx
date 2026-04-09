@@ -61,7 +61,7 @@ export default function HeroSection() {
           <h1 className="text-[38px] md:text-[54px] leading-[1.1] text-[#555555] font-serif">
            Welcome to <br />
           <span className="text-[#C07A50] italic">Alla Beauty</span> <br />
-          Laser & Skin Clinic
+          Laser  Skin Clinic
            </h1>
 
 
