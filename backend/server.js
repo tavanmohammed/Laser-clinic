@@ -24,6 +24,10 @@ app.get("/", (req, res) => {
   res.send("Booking API is running");
 });
 
+app.get("/test-route", (req, res) => {
+  res.send("backend latest code is live");
+});
+
 app.use("/api/auth", authRoutes);
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/admin", adminRoutes);
