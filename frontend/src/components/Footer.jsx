@@ -12,7 +12,7 @@ export default function Footer() {
             {/* COMPANY */}
             <div>
               <h3 className="text-[20px] font-semibold text-[#4a4a4a]">
-                Alla Beauty Laser  Skin Clinic
+                Alla Beauty Laser Skin Clinic
               </h3>
 
               <div className="mt-8 space-y-4 text-[18px]">
