@@ -20,9 +20,6 @@ app.use(
 
 app.use(express.json());
 
-app.get("/", (req, res) => {
-  res.send("Booking API is running");
-});
 
 app.get("/test-route", (req, res) => {
   res.send("backend latest code is live");
