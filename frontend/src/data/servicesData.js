@@ -73,7 +73,7 @@ const servicesData = [
     category: "Hair Removal",
     area: "Medium Area",
     duration: "15 MIN",
-    price: 50,
+    price: 30,
     image: underarmsImg,
   },
   {
@@ -136,7 +136,7 @@ const servicesData = [
     category: "Hair Removal",
     area: "Large Area",
     duration: "45–50 MIN",
-    price: 150,
+    price: 130,
     image: backLegImg,
   },
 // LASER PACKAGES (FULL BODY)
