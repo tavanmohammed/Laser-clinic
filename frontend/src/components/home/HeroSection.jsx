@@ -9,8 +9,8 @@ const images = [hero1, hero2, hero3];
 
 const offers = [
   {
-    title: "Laser Full Body Offer with face",
-    price: "$180",
+    title: " First time Laser Full Body Offer with face",
+    price: "$150",
   },
   {
     title: " First time Hydrofacial Glow Deal",
