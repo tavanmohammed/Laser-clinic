@@ -9,16 +9,16 @@ const images = [hero1, hero2, hero3];
 
 const offers = [
   {
-    title: "Laser Full Body Offer",
-    price: "$150 → $120",
+    title: "Laser Full Body Offer with face",
+    price: "$180",
   },
   {
-    title: "Hydrofacial Glow Deal",
-    price: "$120 → Save $25",
+    title: " First time Hydrofacial Glow Deal",
+    price: "$100 → Save $50",
   },
   {
     title: "Microneedling Special",
-    price: "$200 → $170",
+    price: "$200",
   },
 ];
 
