@@ -14,7 +14,7 @@ const offers = [
   },
   {
     title: " First time Hydrofacial Glow Deal",
-    price: "$100 → Save $50",
+    price: "$100 → Save $20",
   },
   {
     title: "Microneedling Special",
